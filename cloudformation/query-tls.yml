@@ -1,0 +1,245 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: TODO
+
+Parameters:
+  LambdaBucket:
+    Type: String
+    Description: Bucket where query-tls lambda zip file can be downloaded from.
+    Default: uptycs-query-tls
+  LambdaKey:
+    Type: String
+    Description: S3 object key for query-tls lambda zip file.
+    Default: query-tls-0.1.0.zip
+  StorageBucket:
+    Type: String
+    Description: S3 bucket that will be created where Lambda will save the log data.
+  EnrollSecret:
+    Type: String
+    Description: Secret expected from the Osquery based agent. TODO Ideally this shoud be saved in AWS Secrets Manager.
+    NoEcho: true
+  Email:
+    Type: String
+    Description: Email address where rule match notifications will be sent to via SNS.
+
+Resources:
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: '/aws/lambda/query-tls'
+      RetentionInDays: 1
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: query-tls
+      Handler: index.handler
+      Description: AWS Lambda TLS server for Osquery or extensions (kubequery, etc.)
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3Bucket
+          ENROLL_SECRET: !Ref EnrollSecret
+          SNC_TOPIC_ARN: !Ref SNSTopic
+      Code:
+        S3Bucket: !Ref LambdaBucket
+        S3Key: !Ref LambdaKey
+      MemorySize: 256
+      Role: !GetAtt IAMRole.Arn
+      Runtime: nodejs14.x
+      Timeout: 10
+      TracingConfig:
+        Mode: PassThrough
+
+  LambdaPermissionEnroll:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/enroll
+
+  LambdaPermissionLog:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/log
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: query-tls
+      ApiKeySourceType: HEADER
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: DummyState
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: default
+      DeploymentId: !Ref ApiGatewayDeployment
+      RestApiId: !Ref ApiGatewayRestApi
+      CacheClusterEnabled: false
+      CacheClusterSize: 0.5
+      MethodSettings:
+        - CacheDataEncrypted: false
+          CacheTtlInSeconds: 300
+          CachingEnabled: false
+          DataTraceEnabled: false
+          HttpMethod: "*"
+          MetricsEnabled: false
+          ResourcePath: "*"
+          ThrottlingBurstLimit: 5000
+          ThrottlingRateLimit: 10000
+      TracingEnabled: false
+
+  ApiGatewayResourceLog:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      PathPart: log
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+  ApiGatewayResourceEnroll:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      PathPart: enroll
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+  ApiGatewayMethodLog:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResourceLog
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      RequestParameters: {}
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          StatusCode: 200
+      Integration:
+        CacheNamespace: !Ref ApiGatewayResourceLog
+        ContentHandling: CONVERT_TO_TEXT
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - ResponseTemplates: {}
+            StatusCode: 200
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction}/invocations
+
+  ApiGatewayMethodEnroll:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResourceEnroll
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      RequestParameters: {}
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          StatusCode: 200
+      Integration:
+        CacheNamespace: !Ref ApiGatewayResourceEnroll
+        ContentHandling: CONVERT_TO_TEXT
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - ResponseTemplates: {}
+            StatusCode: 200
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction}/invocations
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref StorageBucket
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: false
+
+  IAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /service-role/
+      RoleName: query-tls-lambda
+      AssumeRolePolicyDocument: '{Version:2012-10-17, Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]}'
+      MaxSessionDuration: 3600
+
+  IAMPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      Roles: !Ref IAMRole
+      PolicyName: query-tls-lambda-policy
+      PolicyDocument: !Sub |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": "sns:Publish",
+                "Resource": "${SNSTopic}"
+              },
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": "${LambdaLogGroup}:*"
+              },
+              {
+                "Effect": "Allow",
+                "Action": "s3:PutObject",
+                "Resource": "${S3Bucket}/*"
+              }
+            ]
+          }
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: query-tls
+      TopicName: query-tls
+
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument: !Sub '{Statement:[{Effect: Allow, Principal: {AWS: lambda.amazonaws.com}, Action: sns:Publish, Resource: ${SNSTopic}, Condition:{StringEquals: {AWS:SourceAccount: ${AWS::AccountId}}}}]}'
+      Topics:
+        - !Ref SNSTopic
+
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SNSTopic
+      Endpoint: !Ref Email
+      Protocol: email
+      Region: !Ref AWS::Region
+
+Outputs:
+  TLSHostname:
+    Description: TLS/HTTPS hostname for Logger and Enroll plugins
+    Value: !Sub '${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com'
+  EnrollTLSEndpoint:
+    Description: TLS/HTTPS endpoint for client enrollment
+    Value: /default/enroll
+  LoggerTLSEndpoint:
+    Description: TLS/HTTPS endpoint for results logging
+    Value: !Sub '${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com'

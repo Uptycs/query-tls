@@ -1,0 +1,44 @@
+{
+  "name": "query-tls",
+  "version": "0.1.0",
+  "description": "AWS Lambda TLS server for *query",
+  "author": "Seshu Pasam",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.903.0",
+    "json-logic-js": "^2.0.1",
+    "mocha": "^8.4.0"
+  },
+  "devDependencies": {
+    "eslint": "^7.25.0",
+    "husky": "^6.0.0",
+    "lint-staged": "^10.5.4",
+    "prettier": "^2.2.1"
+  },
+  "scripts": {
+    "package": "rm -f *.zip && npm install --prod && npm prune --prod && zip -r query-tls-$npm_package_version.zip index.js rules package.json node_modules",
+    "s3": "aws s3 cp query-tls-$npm_package_version.zip s3://uptycs-query-tls/ --acl public-read",
+    "update": "aws lambda update-function-code --function-name query-tls --zip-file fileb://query-tls-$npm_package_version.zip",
+    "test": "mocha",
+    "lint": "eslint --max-warnings 0 . ",
+    "lintfix": "eslint --fix .",
+    "precommit": "lint-staged",
+    "prettier": "prettier --write '**/*.js'"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.js": [
+      "prettier --write",
+      "eslint"
+    ]
+  },
+  "keywords": [
+    "query",
+    "tls"
+  ]
+}

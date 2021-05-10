@@ -1,0 +1,39 @@
+{
+  "Container checks": {
+    "tables": [
+      "kubernetes_daemon_set_containers",
+      "kubernetes_deployments_containers",
+      "kubernetes_replica_set_containers",
+      "kubernetes_stateful_set_containers",
+      "kubernetes_pod_template_containers",
+      "kubernetes_pod_containers"
+    ],
+    "rules": {
+      "Container resource requests/limits CPU/memory are not configured": {
+        "if": [
+          {"missing": ["resource_limits.cpu", "resource_limits.memory", "resource_requests.cpu", "resource_requests.memory"]},
+          true,
+          false
+        ]
+      },
+      "Container drop capabilities does not include ALL": {
+        "!": {"in": ["all", {"var": "capabilities_drop"}]}
+      },
+      "Container is using CAP_SYS_ADMIN capability": {
+        "in": ["CAP_SYS_ADMIN", {"var": "capabilities_add"}]
+      },
+      "Privileged container": {
+        "==" : [{"var": "privileged"}, "1"]
+      },
+      "Container root file system is not read-only": {
+        "!=" : [{"var": "read_only_root_filesystem"}, "1"]
+      },
+      "Container is not configured to run as non-root user": {
+        "!=" : [{"var": "run_as_non_root"}, "1"]
+      },
+      "Container UID value should be high to avoid conflict with host UIDs": {
+        "<" : [{"var": "run_as_user"}, "10000"]
+      }
+    }
+  }
+}
