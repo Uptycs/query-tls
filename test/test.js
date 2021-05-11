@@ -53,14 +53,50 @@ describe('Rules', () => {
     assert.strictEqual(re.apply(rule, {capabilities_drop: ['abc', 'def', 'all']}), false);
   });
 
-  it('Container is using CAP_SYS_ADMIN capability', () => {
-    const rule = { in: ['SYS_ADMIN', { var: 'capabilities_add' }] };
+  it('Container using capabilities that allow privilege escalation', () => {
+    const rule = {
+      or: [
+        {in: ['SYS_ADMIN', {var: 'capabilities_add'}]},
+        {in: ['SYS_PTRACE', {var: 'capabilities_add'}]},
+        {in: ['SYS_MODULE', {var: 'capabilities_add'}]},
+        {in: ['DAC_READ_SEARCH', {var: 'capabilities_add'}]},
+        {in: ['DAC_OVERRIDE', {var: 'capabilities_add'}]},
+        {in: ['CHOWN', {var: 'capabilities_add'}]},
+        {in: ['FORMER', {var: 'capabilities_add'}]},
+        {in: ['SETUID', {var: 'capabilities_add'}]},
+        {in: ['SETGID', {var: 'capabilities_add'}]},
+        {in: ['SETFCAP', {var: 'capabilities_add'}]},
+        {in: ['KILL', {var: 'capabilities_add'}]},
+        {in: ['NET_BIND_SERVICE', {var: 'capabilities_add'}]},
+        {in: ['NET_RAW', {var: 'capabilities_add'}]},
+        {in: ['LINUX_IMMUTABLE', {var: 'capabilities_add'}]},
+        {and: [
+          {in: ['NET_ADMIN', {var: 'capabilities_add'}]},
+          {in: ['NET_RAW', {var: 'capabilities_add'}]}
+        ]}
+      ]
+    };
     assert.strictEqual(re.apply(rule, {}), false);
     assert.strictEqual(re.apply(rule, ''), false);
     assert.strictEqual(re.apply(rule, {capabilities_add: ''}), false);
     assert.strictEqual(re.apply(rule, {capabilities_add: ['']}), false);
     assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', 'def', '']}), false);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'NET_ADMIN']}), false);
     assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', 'def', 'SYS_ADMIN']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'SYS_PTRACE']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'SYS_MODULE']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'DAC_READ_SEARCH']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'DAC_OVERRIDE']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'CHOWN']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'FORMER']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'SETUID']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'SETGID']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'SETFCAP']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'KILL']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'NET_BIND_SERVICE']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'NET_RAW']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'LINUX_IMMUTABLE']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', '', 'NET_RAW', 'NET_ADMIN']}), true);
   });
 
   it('Privileged container', () => {

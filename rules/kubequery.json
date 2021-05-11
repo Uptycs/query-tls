@@ -19,8 +19,27 @@
       "Container drop capabilities does not include ALL": {
         "!": {"in": ["all", {"var": "capabilities_drop"}]}
       },
-      "Container is using CAP_SYS_ADMIN capability": {
-        "in": ["SYS_ADMIN", {"var": "capabilities_add"}]
+      "Container using capabilities that allow privilege escalation": {
+        "or": [
+          {"in": ["SYS_ADMIN", {"var": "capabilities_add"}]},
+          {"in": ["SYS_PTRACE", {"var": "capabilities_add"}]},
+          {"in": ["SYS_MODULE", {"var": "capabilities_add"}]},
+          {"in": ["DAC_READ_SEARCH", {"var": "capabilities_add"}]},
+          {"in": ["DAC_OVERRIDE", {"var": "capabilities_add"}]},
+          {"in": ["CHOWN", {"var": "capabilities_add"}]},
+          {"in": ["FORMER", {"var": "capabilities_add"}]},
+          {"in": ["SETUID", {"var": "capabilities_add"}]},
+          {"in": ["SETGID", {"var": "capabilities_add"}]},
+          {"in": ["SETFCAP", {"var": "capabilities_add"}]},
+          {"in": ["KILL", {"var": "capabilities_add"}]},
+          {"in": ["NET_BIND_SERVICE", {"var": "capabilities_add"}]},
+          {"in": ["NET_RAW", {"var": "capabilities_add"}]},
+          {"in": ["LINUX_IMMUTABLE", {"var": "capabilities_add"}]},
+          {"and": [
+            {"in": ["NET_ADMIN", {"var": "capabilities_add"}]},
+            {"in": ["NET_RAW", {"var": "capabilities_add"}]}
+          ]}
+        ]
       },
       "Privileged container": {
         "==" : [{"var": "privileged"}, "1"]
