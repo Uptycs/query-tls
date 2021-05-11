@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: TODO
+Description: AWS Lambda TLS server for Osquery based agents.
 
 Parameters:
   LambdaBucket:
@@ -25,7 +25,7 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/aws/lambda/query-tls'
+      LogGroupName: /aws/lambda/query-tls
       RetentionInDays: 1
 
   LambdaFunction:
@@ -36,8 +36,8 @@ Resources:
       Description: AWS Lambda TLS server for Osquery or extensions (kubequery, etc.)
       Environment:
         Variables:
-          S3_BUCKET: !Ref S3Bucket
           ENROLL_SECRET: !Ref EnrollSecret
+          S3_BUCKET: !Ref LogsBucket
           SNC_TOPIC_ARN: !Ref SNSTopic
       Code:
         S3Bucket: !Ref LambdaBucket
@@ -75,6 +75,9 @@ Resources:
           - REGIONAL
 
   ApiGatewayDeployment:
+    DependsOn:
+      - ApiGatewayMethodEnroll
+      - ApiGatewayMethodLog
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
@@ -93,19 +96,12 @@ Resources:
           CacheTtlInSeconds: 300
           CachingEnabled: false
           DataTraceEnabled: false
-          HttpMethod: "*"
           MetricsEnabled: false
-          ResourcePath: "*"
+          HttpMethod: "*"
+          ResourcePath: "/*"
           ThrottlingBurstLimit: 5000
           ThrottlingRateLimit: 10000
       TracingEnabled: false
-
-  ApiGatewayResourceLog:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      PathPart: log
-      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
 
   ApiGatewayResourceEnroll:
     Type: AWS::ApiGateway::Resource
@@ -114,30 +110,12 @@ Resources:
       PathPart: enroll
       ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
 
-  ApiGatewayMethodLog:
-    Type: AWS::ApiGateway::Method
+  ApiGatewayResourceLog:
+    Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
-      ResourceId: !Ref ApiGatewayResourceLog
-      HttpMethod: POST
-      AuthorizationType: NONE
-      ApiKeyRequired: false
-      RequestParameters: {}
-      MethodResponses:
-        - ResponseModels:
-            application/json: Empty
-          StatusCode: 200
-      Integration:
-        CacheNamespace: !Ref ApiGatewayResourceLog
-        ContentHandling: CONVERT_TO_TEXT
-        IntegrationHttpMethod: POST
-        IntegrationResponses:
-          - ResponseTemplates: {}
-            StatusCode: 200
-        PassthroughBehavior: WHEN_NO_MATCH
-        TimeoutInMillis: 29000
-        Type: AWS_PROXY
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction}/invocations
+      PathPart: log
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
 
   ApiGatewayMethodEnroll:
     Type: AWS::ApiGateway::Method
@@ -164,10 +142,40 @@ Resources:
         Type: AWS_PROXY
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction}/invocations
 
-  S3Bucket:
+  ApiGatewayMethodLog:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResourceLog
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      RequestParameters: {}
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          StatusCode: 200
+      Integration:
+        CacheNamespace: !Ref ApiGatewayResourceLog
+        ContentHandling: CONVERT_TO_TEXT
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - ResponseTemplates: {}
+            StatusCode: 200
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaFunction}/invocations
+
+  LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref StorageBucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -179,14 +187,27 @@ Resources:
     Properties:
       Path: /service-role/
       RoleName: query-tls-lambda
-      AssumeRolePolicyDocument: '{Version:2012-10-17, Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]}'
       MaxSessionDuration: 3600
+      AssumeRolePolicyDocument: !Sub |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": "sts:AssumeRole",
+                "Principal": {
+                  "Service": "lambda.amazonaws.com"
+                }
+              }
+            ]
+          }
 
   IAMPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      Roles: !Ref IAMRole
       PolicyName: query-tls-lambda-policy
+      Roles:
+        - !Ref IAMRole
       PolicyDocument: !Sub |
           {
             "Version": "2012-10-17",
@@ -202,12 +223,12 @@ Resources:
                   "logs:CreateLogStream",
                   "logs:PutLogEvents"
                 ],
-                "Resource": "${LambdaLogGroup}:*"
+                "Resource": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LambdaLogGroup}:*"
               },
               {
                 "Effect": "Allow",
                 "Action": "s3:PutObject",
-                "Resource": "${S3Bucket}/*"
+                "Resource": "arn:aws:s3:::${LogsBucket}/*"
               }
             ]
           }
@@ -221,9 +242,27 @@ Resources:
   SNSTopicPolicy:
     Type: AWS::SNS::TopicPolicy
     Properties:
-      PolicyDocument: !Sub '{Statement:[{Effect: Allow, Principal: {AWS: lambda.amazonaws.com}, Action: sns:Publish, Resource: ${SNSTopic}, Condition:{StringEquals: {AWS:SourceAccount: ${AWS::AccountId}}}}]}'
       Topics:
         - !Ref SNSTopic
+      PolicyDocument: !Sub |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": "sns:Publish",
+                "Principal": {
+                  "Service": "lambda.amazonaws.com"
+                },
+                "Resource": "${SNSTopic}",
+                "Condition": {
+                  "StringEquals": {
+                    "AWS:SourceAccount": "${AWS::AccountId}"
+                  }
+                }
+              }
+            ]
+          }
 
   SNSSubscription:
     Type: AWS::SNS::Subscription
@@ -242,4 +281,4 @@ Outputs:
     Value: /default/enroll
   LoggerTLSEndpoint:
     Description: TLS/HTTPS endpoint for results logging
-    Value: !Sub '${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Value: /default/log
