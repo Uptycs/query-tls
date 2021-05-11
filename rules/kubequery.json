@@ -44,13 +44,19 @@
       "Privileged container": {
         "==" : [{"var": "privileged"}, "1"]
       },
+      "Container allows privilege escalation": {
+        "==" : [{"var": "allow_privilege_escalation"}, "1"]
+      },
       "Container root file system is not read-only": {
         "!=" : [{"var": "read_only_root_filesystem"}, "1"]
       },
       "Container is not configured to run as non-root user": {
         "!=" : [{"var": "run_as_non_root"}, "1"]
       },
-      "Container UID value should be high to avoid conflict with host UIDs": {
+      "Container run as user ID should not be root UID": {
+        "==" : [{"var": "run_as_user"}, "0"]
+      },
+      "Container run as user ID should be high to avoid conflict with host UIDs": {
         "<" : [{"var": "run_as_user"}, "10000"]
       },
       "Container using host's IPC, network or PID namespace": {

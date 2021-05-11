@@ -16,7 +16,9 @@ describe('Rules', () => {
       assert.ok(Object.keys(tableRules).length > 0);
     });
   });
+});
 
+describe('Container checks', () => {
   it('Container resource requests/limits CPU/memory are not configured', () => {
     const rule = {
       if: [
@@ -132,7 +134,20 @@ describe('Rules', () => {
     assert.strictEqual(re.apply(rule, {run_as_non_root: 1}), false);
   });
 
-  it('Container UID value should be high to avoid conflict with host UIDs', () => {
+  it('Container run as user ID should not be root UID', () => {
+    const rule = { '==' : [{var: 'run_as_user'}, '0'] };
+    assert.strictEqual(re.apply(rule, {}), false);
+    assert.strictEqual(re.apply(rule, ''), false);
+    assert.strictEqual(re.apply(rule, {run_as_user: ''}), false);
+    assert.strictEqual(re.apply(rule, {run_as_user: '0'}), true);
+    assert.strictEqual(re.apply(rule, {run_as_user: 0}), true);
+    assert.strictEqual(re.apply(rule, {run_as_user: '1'}), false);
+    assert.strictEqual(re.apply(rule, {run_as_user: 1}), false);
+    assert.strictEqual(re.apply(rule, {run_as_user: '10000'}), false);
+    assert.strictEqual(re.apply(rule, {run_as_user: 10000}), false);
+  });
+
+  it('Container run as user ID should be high to avoid conflict with host UIDs', () => {
     const rule = { '<': [{ var: 'run_as_user' }, '10000'] };
     assert.strictEqual(re.apply(rule, {}), true);
     assert.strictEqual(re.apply(rule, ''), true);
@@ -161,5 +176,19 @@ describe('Rules', () => {
     assert.strictEqual(re.apply(rule, {host_network: '', host_ipc: '1', host_pid: '0'}), true);
     assert.strictEqual(re.apply(rule, {host_network: '', host_ipc: '0', host_pid: 1}), true);
     assert.strictEqual(re.apply(rule, {host_network: '1', host_ipc: '0', host_pid: 1}), true);
+  });
+});
+
+describe('Volume checks', () => {
+  it('Sock file mounted from host', () => {
+    const rule = {
+      in:['.sock', {var: 'host_path_path'}]
+    };
+    assert.strictEqual(re.apply(rule, {}), false);
+    assert.strictEqual(re.apply(rule, ''), false);
+    assert.strictEqual(re.apply(rule, {host_path_path: {}}), false);
+    assert.strictEqual(re.apply(rule, {host_path_path: ''}), false);
+    assert.strictEqual(re.apply(rule, {host_path_path: '/var/run/docker.sock'}), true);
+    assert.strictEqual(re.apply(rule, {host_path_path: '/run/containerd/containerd.sock'}), true);
   });
 });
