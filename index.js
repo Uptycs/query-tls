@@ -5,16 +5,22 @@ const fs = require('fs');
 const re = require('json-logic-js');
 const AWS = require('aws-sdk');
 
-const ENROLL_SECRET = process.env.ENROLL_SECRET || '';
+const enrollSecrets = process.env.ENROLL_SECRETS || '';
 const Bucket = process.env.S3_BUCKET;
 const ContentType = 'application/json';
 const TopicArn = process.env.SNC_TOPIC_ARN;
 
 const OK = {statusCode: 200};
 const ERROR = {statusCode: 500};
-const NODE_KEY = crypto.createHash('sha256').update(ENROLL_SECRET).digest('hex');
-const RULES = getRules();
 
+const ENROLL_SECRETS = [], NODE_KEYS = [];
+enrollSecrets.split(',').forEach(secret => {
+  const trimmed = secret.trim();
+  ENROLL_SECRETS.push(trimmed);
+  NODE_KEYS.push(crypto.createHash('sha256').update(trimmed).digest('hex'));
+});
+
+const RULES = getRules();
 const s3 = new AWS.S3({region: process.env.AWS_REGION});
 const sns = new AWS.SNS({region: process.env.AWS_REGION});
 
@@ -64,16 +70,22 @@ function getRules() {
 }
 
 function enroll(body) {
-  if (body.enroll_secret !== ENROLL_SECRET) {
+  if (!body.enroll_secret || ENROLL_SECRETS.indexOf(body.enroll_secret) < 0) {
     console.error('Invalid enroll secret');
     return ERROR;
   }
-  return {statusCode: 200, body: JSON.stringify({node_key: NODE_KEY, node_invalid: false})};
+
+  const node_key = crypto.createHash('sha256').update(body.enroll_secret).digest('hex');
+  return {statusCode: 200, body: JSON.stringify({node_key, node_invalid: false})};
 }
 
 async function log(body) {
-  if (body.node_key !== NODE_KEY) {
+  if (!body.node_key || NODE_KEYS.indexOf(body.node_key) < 0) {
     console.error('Invalid node key:', body.node_key);
+    return ERROR;
+  }
+  if (!body.log_type || !body.data) {
+    console.error('Invalid log data:', JSON.stringify(body, 0, 2));
     return ERROR;
   }
 

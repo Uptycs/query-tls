@@ -13,9 +13,9 @@ Parameters:
   StorageBucket:
     Type: String
     Description: S3 bucket that will be created where Lambda will save the log data.
-  EnrollSecret:
+  EnrollSecrets:
     Type: String
-    Description: Secret expected from the Osquery based agent. TODO Ideally this shoud be saved in AWS Secrets Manager.
+    Description: Comma-separated list of secrets expected from the Osquery based agents. TODO Ideally this shoud be saved in AWS Secrets Manager.
     NoEcho: true
   Email:
     Type: String
@@ -36,7 +36,7 @@ Resources:
       Description: AWS Lambda TLS server for Osquery or extensions (kubequery, etc.)
       Environment:
         Variables:
-          ENROLL_SECRET: !Ref EnrollSecret
+          ENROLL_SECRETS: !Ref EnrollSecrets
           S3_BUCKET: !Ref LogsBucket
           SNC_TOPIC_ARN: !Ref SNSTopic
       Code:

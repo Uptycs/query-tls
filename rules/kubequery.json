@@ -20,7 +20,7 @@
         "!": {"in": ["all", {"var": "capabilities_drop"}]}
       },
       "Container is using CAP_SYS_ADMIN capability": {
-        "in": ["CAP_SYS_ADMIN", {"var": "capabilities_add"}]
+        "in": ["SYS_ADMIN", {"var": "capabilities_add"}]
       },
       "Privileged container": {
         "==" : [{"var": "privileged"}, "1"]

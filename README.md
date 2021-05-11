@@ -17,7 +17,7 @@ Generic [Osquery](https://osquery.io) TLS service that can be deployed in AWS as
 
 [AWS CloudFormation](cloudformation/query-tls.yml) template can be used to create the necessary AWS resources. CloudFormation template requires 5 parameters:
 * `Email`: Email address to send alert notifications to
-* `EnrollSecret`: Shared secret that should match the agent side value
+* `EnrollSecrets`: Comma-separated list of shared secrets that should match the agent side enroll secret
 * `StorageBucket`: S3 bucket that will be created by CloudFormation where log data is stored
 * `LambdaBucket`: S3 bucket where Lambda zip can be deployed from
 * `LambdaKey`: S3 key path to the Lambda zip file
@@ -53,7 +53,7 @@ Example `kubequery.flags` file for connecting to the Lambda:
 --logger_tls_compress=true
 ```
 
-`EnrollSecret` CloudFormation input parameter value should match the kubequery `enroll.secret` in kubequery YAML.
+`EnrollSecrets` CloudFormation input parameter should include kubequery `enroll.secret` in kubequery YAML.
 
 Once CloudFormation resources are created and Osquery/basequery agent starts sending data, `StorageBucket` should start to accumulate structured log data:
 

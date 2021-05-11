@@ -54,13 +54,13 @@ describe('Rules', () => {
   });
 
   it('Container is using CAP_SYS_ADMIN capability', () => {
-    const rule = { in: ['CAP_SYS_ADMIN', { var: 'capabilities_add' }] };
+    const rule = { in: ['SYS_ADMIN', { var: 'capabilities_add' }] };
     assert.strictEqual(re.apply(rule, {}), false);
     assert.strictEqual(re.apply(rule, ''), false);
     assert.strictEqual(re.apply(rule, {capabilities_add: ''}), false);
     assert.strictEqual(re.apply(rule, {capabilities_add: ['']}), false);
     assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', 'def', '']}), false);
-    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', 'def', 'CAP_SYS_ADMIN']}), true);
+    assert.strictEqual(re.apply(rule, {capabilities_add: ['abc', 'def', 'SYS_ADMIN']}), true);
   });
 
   it('Privileged container', () => {
