@@ -33,6 +33,29 @@
       },
       "Container UID value should be high to avoid conflict with host UIDs": {
         "<" : [{"var": "run_as_user"}, "10000"]
+      },
+      "Container using host's IPC, network or PID namespace": {
+        "or": [
+          {"==" : [{"var": "host_network"}, "1"]},
+          {"==" : [{"var": "host_ipc"}, "1"]},
+          {"==" : [{"var": "host_pid"}, "1"]}
+        ]
+      }
+    }
+  },
+  "Volume checks": {
+    "tables": [
+      "kubernetes_daemon_set_volumes",
+      "kubernetes_deployments_volumes",
+      "kubernetes_replica_set_volumes",
+      "kubernetes_stateful_set_volumes",
+      "kubernetes_pod_template_volumes",
+      "kubernetes_pod_volumes",
+      "kubernetes_persistent_volumes"
+    ],
+    "rules": {
+      "Sock file mounted from host": {
+        "in":[".sock", {"var": "host_path_path"}]
       }
     }
   }

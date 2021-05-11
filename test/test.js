@@ -108,4 +108,22 @@ describe('Rules', () => {
     assert.strictEqual(re.apply(rule, {run_as_user: '10000'}), false);
     assert.strictEqual(re.apply(rule, {run_as_user: 10000}), false);
   });
+
+  it('Container using hosts IPC, network or PID namespace', () => {
+    const rule = {
+      or: [
+        {'==' : [{var: 'host_network'}, '1']},
+        {'==' : [{var: 'host_ipc'}, '1']},
+        {'==' : [{var: 'host_pid'}, '1']}
+      ]
+    };
+    assert.strictEqual(re.apply(rule, {}), false);
+    assert.strictEqual(re.apply(rule, ''), false);
+    assert.strictEqual(re.apply(rule, {host_network: ''}), false);
+    assert.strictEqual(re.apply(rule, {host_network: '', host_ipc: 0, host_pid: '0'}), false);
+    assert.strictEqual(re.apply(rule, {host_network: 1, host_ipc: 0, host_pid: '0'}), true);
+    assert.strictEqual(re.apply(rule, {host_network: '', host_ipc: '1', host_pid: '0'}), true);
+    assert.strictEqual(re.apply(rule, {host_network: '', host_ipc: '0', host_pid: 1}), true);
+    assert.strictEqual(re.apply(rule, {host_network: '1', host_ipc: '0', host_pid: 1}), true);
+  });
 });
