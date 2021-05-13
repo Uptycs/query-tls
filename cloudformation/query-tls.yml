@@ -9,7 +9,7 @@ Parameters:
   LambdaKey:
     Type: String
     Description: S3 object key for query-tls lambda zip file.
-    Default: query-tls-0.1.0.zip
+    Default: query-tls-0.2.0.zip
   StorageBucket:
     Type: String
     Description: S3 bucket that will be created where Lambda will save the log data.
