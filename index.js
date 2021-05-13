@@ -150,10 +150,21 @@ function parseResult(data) {
       partitions[day] = [];
     }
 
-    const row = record.columns;
-    row.calendarTime = record.calendarTime;
-    row.unixTime = record.unixTime;
-    row.added = record.action === 'added';
+    const row = {
+      calendarTime: record.calendarTime,
+      unixTime: record.unixTime,
+      added: record.action === 'added',
+    };
+    Object.keys(record.columns).forEach(key => {
+      const value = record.columns[key];
+      if (value && typeof value === 'string' && value.length > 1
+          && (value.charAt(0) === '{' && value.charAt(value.length - 1) === '}')
+            || (value.charAt(0) === '[' && value.charAt(value.length - 1) === ']')) {
+        row[key] = JSON.parse(value);
+      } else {
+        row[key] = value;
+      }
+    });
     partitions[day].push(row);
   }
 
@@ -184,12 +195,15 @@ async function uploadToS3(data) {
       const id = crypto.randomBytes(20).toString('hex');
       const Key = `${tableName}/day=${day}/${id}.json`;
 
+      // https://github.com/aws/aws-sdk-js/issues/3591
       for (let i = 0; i < 3; i++) {
         try {
           await s3.putObject({ Bucket, Key, ContentType, Body }).promise();
           break;
         } catch (err) {
-          console.error('Error uploading to S3:', tableName, 'Retrying:', err);
+          if (i === 2) {
+            console.error('Error uploading to S3:', tableName, 'Retrying:', err);
+          }
         }
       }
     });
@@ -210,15 +224,21 @@ async function processRules(data) {
           if (row.added && re.apply(tableRules[ruleName], row)) {
             const msg = JSON.stringify(row, 0, 2);
             console.info('Rule match:', ruleName, '. Data:', msg);
-            try {
-              await sns.publish({
-                TopicArn,
-                MessageStructure: 'json',
-                Subject: 'Rule failed: ' + ruleName,
-                Message: JSON.stringify({default: msg})
-              }).promise();
-            } catch (err) {
-              console.error('Error publishing to SNS:', tableName, 'Rule:', ruleName, err);
+
+            // https://github.com/aws/aws-sdk-js/issues/3591
+            for (let i = 0; i < 3; i++) {
+              try {
+                await sns.publish({
+                  TopicArn,
+                  MessageStructure: 'json',
+                  Subject: 'Rule failed: ' + ruleName,
+                  Message: JSON.stringify({default: msg})
+                }).promise();
+              } catch (err) {
+                if (i === 2) {
+                  console.error('Error publishing to SNS:', tableName, 'Rule:', ruleName, err);
+                }
+              }
             }
           }
         });
